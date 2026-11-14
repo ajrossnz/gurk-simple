@@ -128,22 +128,15 @@ fn draw_sidebar(f: &mut Frame, app: &mut App, area: Rect) {
 }
 
 fn draw_hints(f: &mut Frame, context: &str, hints: &[(String, &'static str)], area: Rect) {
-    let max_key_width = (area.width as usize).saturating_sub(2) / 2;
-    let key_width = hints
-        .iter()
-        .map(|(key, _)| key.width())
-        .max()
-        .unwrap_or(0)
-        .min(max_key_width);
     let key_style = Style::default()
         .fg(Color::Cyan)
         .add_modifier(Modifier::BOLD);
     let lines: Vec<Line> = hints
         .iter()
         .map(|(key, desc)| {
-            let pad = key_width.saturating_sub(key.width());
             Line::from(vec![
-                Span::styled(format!("{}{key} ", " ".repeat(pad)), key_style),
+                Span::styled(key.as_str(), key_style),
+                Span::raw(" "),
                 Span::raw(*desc),
             ])
         })
@@ -178,9 +171,9 @@ fn context_hints(app: &App) -> (&'static str, Vec<(String, &'static str)>) {
         (
             "react",
             vec![
-                Fixed("←↓↑→ hjkl", "choose emoji"),
-                Fixed("Enter", "react / un-react"),
-                Fixed("/", "search (last cell)"),
+                Fixed("hjkl", "move"),
+                Fixed("Enter", "react"),
+                Fixed("/", "search"),
                 Fixed("Esc", "cancel"),
             ],
         )
@@ -188,10 +181,10 @@ fn context_hints(app: &App) -> (&'static str, Vec<(String, &'static str)>) {
         let mut hints = vec![
             Fixed("↑↓ jk", "move"),
             Fixed("Enter", "open / choose"),
-            Fixed("h ←", "parent directory"),
+            Fixed("h ←", "up a folder"),
             Fixed("/", "filter"),
-            Fixed(".", "show hidden files"),
-            Fixed("~", "home directory"),
+            Fixed(".", "hidden files"),
+            Fixed("~", "home"),
             Fixed("Esc", "cancel"),
         ];
         if matches!(browser.purpose, BrowserPurpose::SaveTo(_)) {
@@ -212,7 +205,7 @@ fn context_hints(app: &App) -> (&'static str, Vec<(String, &'static str)>) {
         (
             "pick chat",
             vec![
-                Fixed("type", "filter by name"),
+                Fixed("type", "filter"),
                 Fixed("↑↓", "choose"),
                 Fixed("Enter", "open chat"),
                 Fixed("Esc", "cancel"),
@@ -224,21 +217,21 @@ fn context_hints(app: &App) -> (&'static str, Vec<(String, &'static str)>) {
                 "chats",
                 vec![
                     Fixed("↑↓ jk", "choose chat"),
-                    Cmd(CHANNELS, Command::FocusInput, "write message"),
+                    Cmd(CHANNELS, Command::FocusInput, "type message"),
                     Cmd(MAIN, Command::FocusNext, "next pane"),
                     Cmd(MAIN, Command::NewMessage, "new chat"),
                     Cmd(MAIN, Command::ToggleChannelModal, "jump to chat"),
-                    Cmd(MAIN, Command::ToggleMuteChannel, "mute / unmute"),
-                    Cmd(MAIN, Command::Search, "find in chat"),
-                    Cmd(ANYWHERE, Command::Help, "all shortcuts"),
+                    Cmd(MAIN, Command::ToggleMuteChannel, "mute"),
+                    Cmd(MAIN, Command::Search, "find"),
+                    Cmd(ANYWHERE, Command::Help, "help"),
                     Cmd(ANYWHERE, Command::Quit, "quit"),
                 ],
             ),
             Focus::Messages => (
                 "messages",
                 vec![
-                    Fixed("↑↓ jk", "select message"),
-                    Cmd(MESSAGES, Command::OpenMessage, "open / download"),
+                    Fixed("↑↓ jk", "select"),
+                    Cmd(MESSAGES, Command::OpenMessage, "open/download"),
                     Cmd(MESSAGES, Command::ReactPicker, "react"),
                     Cmd(MESSAGES, Command::Reply, "reply"),
                     Cmd(MESSAGES, Command::EditMessage, "edit (own)"),
@@ -248,10 +241,10 @@ fn context_hints(app: &App) -> (&'static str, Vec<(String, &'static str)>) {
                         Command::CopyMessage(MessageSelector::Selected),
                         "copy text",
                     ),
-                    Cmd(MESSAGES, Command::SaveAttachment, "save to folder"),
+                    Cmd(MESSAGES, Command::SaveAttachment, "save to..."),
                     Cmd(MESSAGES, Command::AttachFile, "attach file"),
-                    Cmd(MAIN, Command::Search, "find in chat"),
-                    Fixed("Esc", "back to input"),
+                    Cmd(MAIN, Command::Search, "find"),
+                    Fixed("Esc", "to input"),
                 ],
             ),
             Focus::Input => (
@@ -262,9 +255,9 @@ fn context_hints(app: &App) -> (&'static str, Vec<(String, &'static str)>) {
                     Cmd(INPUT, Command::AttachFile, "attach file"),
                     Cmd(MAIN, Command::Paste, "paste"),
                     Cmd(INPUT, Command::ClearInput, "clear"),
-                    Cmd(INPUT, Command::OpenEditor, "external editor"),
-                    Fixed(":name:", "emoji (Tab completes)"),
-                    Fixed("Esc", "cancel reply / edit"),
+                    Cmd(INPUT, Command::OpenEditor, "editor"),
+                    Fixed(":name:", "emoji"),
+                    Fixed("Esc", "cancel reply"),
                     Cmd(MAIN, Command::FocusNext, "next pane"),
                 ],
             ),
@@ -280,7 +273,7 @@ fn context_hints(app: &App) -> (&'static str, Vec<(String, &'static str)>) {
     (context, hints)
 }
 
-/// Formats the (at most two) keys bound to `cmd` in `modes`, e.g. "Ctrl+M/Alt+M"
+/// Formats the preferred key bound to `cmd` in `modes`, e.g. "Ctrl+M"
 fn keys_for(app: &App, modes: &[WindowMode], cmd: &Command) -> Option<String> {
     let format = KeyCombinationFormat::default()
         .with_control("Ctrl+")
@@ -299,14 +292,18 @@ fn keys_for(app: &App, modes: &[WindowMode], cmd: &Command) -> Option<String> {
             }
         })
         .collect();
-    // prefer named keys and combinations over plain letters, ctrl over alt
-    keys.sort_by_key(|k| (k.len() == 1, k.contains("Alt+"), k.len(), k.clone()));
-    keys.dedup();
-    if keys.is_empty() {
-        None
-    } else {
-        Some(keys.into_iter().take(2).join("/"))
-    }
+    // prefer named keys and combinations over plain letters, ctrl over alt; shift-enter only
+    // works in terminals supporting the kitty keyboard protocol
+    keys.sort_by_key(|k| {
+        (
+            k == "Shift+Enter",
+            k.len() == 1,
+            k.contains("Alt+"),
+            k.len(),
+            k.clone(),
+        )
+    });
+    keys.into_iter().next()
 }
 
 fn draw_select_channel_popup(f: &mut Frame, select_channel: &mut SelectChannel) {
@@ -1475,7 +1472,7 @@ fn draw_search(f: &mut Frame, app: &mut App) {
         })
         .collect();
     let count = items.len();
-    let mut state = search.state.clone();
+    let mut state = search.state;
 
     let input = Paragraph::new(query.clone()).block(popup_block(" Find in chat "));
     f.render_widget(input, chunks[0]);
@@ -1605,10 +1602,10 @@ mod tests {
                 ),
                 Span::styled("boxdot", Style::default().fg(Color::Green)),
                 Span::raw(": "),
-                Span::raw("[image:"),
+                Span::raw("[image: signal-2022-01-"),
             ]),
             Line::from(vec![Span::raw(
-                "                  signal-2022-01-16T11:59:58.405665+00:00.jpg]",
+                "                  16T11:59:58.405665+00:00.jpg]",
             )]),
         ]));
         assert_eq!(rendered, Some(expected));
@@ -1645,9 +1642,9 @@ mod tests {
                 Span::raw(": "),
                 Span::raw("Hello, World!"),
             ]),
-            Line::from(vec![Span::raw("                  [image:")]),
+            Line::from(vec![Span::raw("                  [image: signal-2022-01-")]),
             Line::from(vec![Span::raw(
-                "                  signal-2022-01-16T11:59:58.405665+00:00.jpg]",
+                "                  16T11:59:58.405665+00:00.jpg]",
             )]),
         ]));
         assert_eq!(rendered, Some(expected));
@@ -1681,10 +1678,10 @@ mod tests {
                 ),
                 Span::styled("boxdot", Style::default().fg(Color::Green)),
                 Span::raw(": "),
-                Span::raw("[voice note:"),
+                Span::raw("[voice note: signal-2022-01-"),
             ]),
             Line::from(vec![Span::raw(
-                "                  signal-2022-01-16T12:00:00.000000+00:00.aac]",
+                "                  16T12:00:00.000000+00:00.aac]",
             )]),
         ]));
         assert_eq!(rendered, Some(expected));
@@ -1988,5 +1985,57 @@ mod tests {
             ]),
         ]));
         assert_eq!(rendered, Some(expected));
+    }
+}
+
+#[cfg(test)]
+mod render_tests {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    use crate::app::tests::test_app;
+    use crate::app::{App, Focus};
+
+    use super::draw;
+
+    fn render(app: &mut App) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+        terminal.draw(|f| draw(f, app)).unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn renders_hints_for_each_focus_and_popups() {
+        let (mut app, _events, _sent) = test_app().await;
+
+        let screen = render(&mut app);
+        println!("{screen}");
+        assert!(screen.contains("Keys: chats"));
+        assert!(screen.contains("Enter type message"));
+
+        app.focus_next();
+        assert_eq!(app.focus, Focus::Messages);
+        let screen = render(&mut app);
+        println!("{screen}");
+        assert!(screen.contains("Keys: messages"));
+        assert!(screen.contains("Ctrl+R react"));
+
+        app.focus_next();
+        let screen = render(&mut app);
+        println!("{screen}");
+        assert!(screen.contains("Enter send"));
+
+        app.set_focus(Focus::Messages);
+        app.reaction_picker = Some(Default::default());
+        let screen = render(&mut app);
+        println!("{screen}");
+        assert!(screen.contains("React"));
     }
 }
