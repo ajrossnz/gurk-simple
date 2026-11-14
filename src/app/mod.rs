@@ -1,7 +1,9 @@
 use std::borrow::Cow;
-use std::cell::Cell;
-use std::collections::{BTreeMap, HashSet};
-use std::path::Path;
+use std::cell::{Cell, RefCell};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::Context as _;
 use itertools::Itertools;
@@ -13,7 +15,10 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::data::{Channel, ChannelId, Message, TypingSet};
 use crate::event::Event;
+use crate::file_browser::FileBrowser;
+use crate::image_preview::{self, PreviewState, Thumbnail};
 use crate::input::Input;
+use crate::reaction_picker::ReactionPicker;
 use crate::receipt::ReceiptHandler;
 use crate::signal::SignalManager;
 use crate::storage::{MessageId, Storage};
@@ -29,7 +34,21 @@ use presage::proto::data_message::Sticker;
 mod channel;
 mod input;
 mod message;
+mod search;
 mod window;
+
+pub(crate) use search::MessageSearch;
+
+/// How long a status message is shown
+const STATUS_TIMEOUT: Duration = Duration::from_secs(8);
+
+/// Which of the three main panes receives keyboard input
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Focus {
+    Channels,
+    Messages,
+    Input,
+}
 
 pub struct App {
     pub config: Config,
@@ -52,8 +71,23 @@ pub struct App {
     receipt_handler: ReceiptHandler,
     pub input: Input,
     drafts: BTreeMap<ChannelId, Input>,
-    pub is_multiline_input: bool,
+    /// Pane receiving keyboard input
+    pub focus: Focus,
     editing: Option<MessageId>,
+    /// Message the input will be sent as a reply to
+    replying_to: Option<MessageId>,
+    /// Files attached to the message being composed, per channel
+    pending_attachments: BTreeMap<ChannelId, Vec<PathBuf>>,
+    /// Popup: emoji picker for reacting to the selected message
+    pub(crate) reaction_picker: Option<ReactionPicker>,
+    /// Popup: file browser for attaching or saving files
+    pub(crate) file_browser: Option<FileBrowser>,
+    /// Popup: search messages in the current channel
+    pub(crate) search: Option<MessageSearch>,
+    /// Transient status line, e.g. "Saved to ~/Downloads/photo.jpg"
+    status: Option<(String, Instant)>,
+    /// Decoded image thumbnails by attachment path
+    image_previews: RefCell<HashMap<PathBuf, PreviewState>>,
     pub(crate) select_channel: SelectChannel,
     clipboard: Option<arboard::Clipboard>,
     event_tx: mpsc::UnboundedSender<Event>,
@@ -72,6 +106,8 @@ pub struct App {
     ///
     /// Written by the renderer, used to load enough messages to fill the view
     pub(crate) message_view_height: usize,
+    /// Area of the channel list, written by the renderer (for mouse clicks)
+    pub channel_list_area: Cell<ratatui::layout::Rect>,
 }
 
 impl App {
@@ -117,8 +153,15 @@ impl App {
             receipt_handler: ReceiptHandler::new(),
             input: Default::default(),
             drafts: BTreeMap::new(),
-            is_multiline_input: false,
+            focus: Focus::Channels,
             editing: None,
+            replying_to: None,
+            pending_attachments: BTreeMap::new(),
+            reaction_picker: None,
+            file_browser: None,
+            search: None,
+            status: None,
+            image_previews: Default::default(),
             select_channel: Default::default(),
             clipboard,
             event_tx,
@@ -129,6 +172,7 @@ impl App {
             timers_activated_for: None,
             next_expiring_at,
             message_view_height: 0,
+            channel_list_area: Default::default(),
         };
 
         app.on_channel_changed();
@@ -169,6 +213,11 @@ impl App {
     ) {
         if old_channel == new_channel {
             return;
+        }
+        // a reply or edit refers to a message in the old channel
+        self.replying_to = None;
+        if self.editing.take().is_some() {
+            self.input.take();
         }
         // Save current input as old channel's draft
         if let Some(old_id) = old_channel {
@@ -306,6 +355,121 @@ impl App {
 
     pub fn toggle_channel_list(&mut self) {
         self.show_channel_list = !self.show_channel_list;
+        if !self.show_channel_list && self.focus == Focus::Channels {
+            self.set_focus(Focus::Input);
+        }
+    }
+
+    /// Whether a popup is shown which captures all keyboard input
+    pub fn is_popup_shown(&self) -> bool {
+        self.display_help
+            || self.select_channel.is_shown
+            || self.reaction_picker.is_some()
+            || self.file_browser.is_some()
+            || self.search.is_some()
+    }
+
+    pub fn set_focus(&mut self, focus: Focus) {
+        if self.focus == focus {
+            return;
+        }
+        let previous = self.focus;
+        self.focus = focus;
+        match focus {
+            Focus::Messages => {
+                // select the newest visible message, so that actions have a target right away
+                let has_selection = self
+                    .selected_channel_id()
+                    .and_then(|id| self.positions.get(&id))
+                    .is_some_and(|pos| pos.selected.is_some());
+                if !has_selection {
+                    self.on_pgup();
+                }
+            }
+            Focus::Channels | Focus::Input => {
+                if previous == Focus::Messages && self.replying_to.is_none() && !self.is_editing()
+                {
+                    self.reset_message_selection();
+                }
+            }
+        }
+    }
+
+    pub fn focus_next(&mut self) {
+        let next = match self.focus {
+            Focus::Channels => Focus::Messages,
+            Focus::Messages => Focus::Input,
+            Focus::Input if self.show_channel_list => Focus::Channels,
+            Focus::Input => Focus::Messages,
+        };
+        self.set_focus(next);
+    }
+
+    pub fn focus_previous(&mut self) {
+        let next = match self.focus {
+            Focus::Channels => Focus::Input,
+            Focus::Messages if self.show_channel_list => Focus::Channels,
+            Focus::Messages => Focus::Input,
+            Focus::Input => Focus::Messages,
+        };
+        self.set_focus(next);
+    }
+
+    pub fn set_status(&mut self, status: impl Into<String>) {
+        self.status = Some((status.into(), Instant::now()));
+    }
+
+    /// Current status message, if it did not time out yet
+    pub fn status(&self) -> Option<&str> {
+        self.status
+            .as_ref()
+            .filter(|(_, at)| at.elapsed() < STATUS_TIMEOUT)
+            .map(|(status, _)| status.as_str())
+    }
+
+    pub(crate) fn replying_to(&self) -> Option<MessageId> {
+        self.replying_to
+    }
+
+    pub(crate) fn pending_attachments(&self) -> &[PathBuf] {
+        self.selected_channel_id()
+            .and_then(|id| self.pending_attachments.get(&id))
+            .map(|v| v.as_slice())
+            .unwrap_or_default()
+    }
+
+    /// Returns the thumbnail of an image, starting to decode it in the background if needed
+    pub(crate) fn image_preview(&self, path: &Path) -> Option<Thumbnail> {
+        let mut previews = self.image_previews.borrow_mut();
+        match previews.get(path) {
+            Some(PreviewState::Ready(thumbnail)) => return Some(thumbnail.clone()),
+            Some(PreviewState::Loading | PreviewState::Failed) => return None,
+            None => {}
+        }
+        if !path.exists() {
+            return None;
+        }
+        previews.insert(path.to_path_buf(), PreviewState::Loading);
+        let path = path.to_path_buf();
+        let tx = self.event_tx.clone();
+        if tokio::runtime::Handle::try_current().is_ok() {
+            tokio::task::spawn_blocking(move || {
+                let image = image_preview::load_thumbnail(&path);
+                let _ = tx.send(Event::ImagePreviewLoaded { path, image });
+            });
+            None
+        } else {
+            let image = image_preview::load_thumbnail(&path);
+            let state = match image {
+                Some(image) => PreviewState::Ready(Arc::new(image)),
+                None => PreviewState::Failed,
+            };
+            previews.insert(path, state.clone());
+            match state {
+                PreviewState::Ready(thumbnail) => Some(thumbnail),
+                _ => None,
+            }
+        }
     }
 
     pub fn handle_event(&mut self, event: Event) -> anyhow::Result<()> {
@@ -328,6 +492,13 @@ impl App {
                 if let Some(name) = name.filter(|name| !name.is_empty()) {
                     self.on_profile_name_resolved(user_id, name);
                 }
+            }
+            Event::ImagePreviewLoaded { path, image } => {
+                let state = match image {
+                    Some(image) => PreviewState::Ready(Arc::new(image)),
+                    None => PreviewState::Failed,
+                };
+                self.image_previews.borrow_mut().insert(path, state);
             }
         }
         Ok(())
@@ -390,7 +561,11 @@ pub(super) fn open_url(message: &Message, url_regex: &Regex) -> Option<()> {
 }
 
 pub(super) fn open_file(message: &Message) -> Option<()> {
-    let attachment = message.attachments.first()?;
+    let attachment = message
+        .attachments
+        .iter()
+        .find(|a| image_preview::is_image(&a.content_type))
+        .or_else(|| message.attachments.first())?;
     let file: &Path = attachment.filename.as_ref();
     if let Err(error) = opener::open(file) {
         let path = file.display().to_string();

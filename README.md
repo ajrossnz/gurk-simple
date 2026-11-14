@@ -90,46 +90,54 @@ libraries that are not available on crates.io.
 
 # Key bindings
 
+The screen has three panes: **chats** (left), **messages** and the **message input**.
+`Tab` / `Shift+Tab` moves between them; the focused pane has a thick cyan border. The
+**Keys** box at the bottom left always lists what you can do right now, and `F1` shows
+every shortcut.
+
 ## Default keybindings
 
-* App navigation
-  * `f1` Toggle help panel.
-  * `ctrl+c` Quit.
-* Message input
-  * `tab` Send emoji from input line as reaction on selected message.
-  * `alt+enter` Switch between multi-line and single-line input modes.
-  * `alt+left`, `alt+right` Jump to previous/next word.
-  * `ctrl+w / ctrl+backspace / alt+backspace` Delete last word.
-  * `ctrl+u` Delete to the start of the line.
-  * `enter` *when input box empty in single-line mode* Open URL from selected message.
-  * `enter` *otherwise* Send message.
-* Multi-line message input
-  * `enter` New line
-  * `ctrl+j / Up` Previous line
-  * `ctrl+k / Down` Next line
-* Cursor
-  * `alt+f / alt+Right / ctrl+Right` Move forward one word.
-  * `alt+b / alt+Left / ctrl+Left` Move backward one word.
-  * `ctrl+a / Home` Move cursor to the beginning of the line.
-  * `ctrl+e / End` Move cursor the the end of the line.
-* Message/channel selection
-  * `esc` Reset message selection or close channel selection popup.
-  * `alt+Up / alt+k / PgUp` Select previous message.
-  * `alt+Down / alt+j / PgDown` Select next message.
-  * `ctrl+j / Up` Select previous channel.
-  * `ctrl+k / Down` Select next channel.
-  * `ctrl+p` Open / close channel selection popup.
-  * `alt+m` Toggle mute for the selected channel (silences notifications; muted channels are marked with `[M]`).
-* Clipboard
-  * `alt+y` Copy selected message to clipboard.
-* Help menu
-  * `esc` Close help panel.
-  * `ctrl+j / Up / PgUp` Previous line
-  * `ctrl+k / Down / PgDown` Next line
+* Everywhere
+  * `Tab` / `Shift+Tab` Next / previous pane.
+  * `Ctrl+N` New message to a contact or group.
+  * `Ctrl+P` Jump to a chat by name.
+  * `Ctrl+F` Find messages in the current chat.
+  * `Ctrl+M` (or `Alt+M`) Mute / unmute the current chat.
+  * `Ctrl+V` Paste text, or attach an image, from the clipboard.
+  * `Alt+L` Hide / show the chats pane.
+  * `F1` Help, `Ctrl+C` Quit.
+* Chats pane
+  * `Up/Down` or `j/k` Switch chat.
+  * `Enter` Start typing in the selected chat.
+* Messages pane
+  * `Up/Down` or `j/k` Select a message.
+  * `Enter` Open an image in the default viewer, save other attachments to
+    `~/Downloads`, or open the first link.
+  * `Ctrl+R` React: pick an emoji with the arrows or `hjkl`, `Enter` to react (again to
+    remove). The last cell is a search box: type e.g. `shrug` to find 🤷.
+  * `r` Reply, `e` Edit (own), `Ctrl+D` Delete (own), `y` Copy text.
+  * `Ctrl+S` Save the attachments to a folder of your choice.
+  * `Ctrl+U` Attach a file, `Ctrl+Shift+U` (or `Alt+U`) Clear the input.
+  * `Esc` Back to the input.
+* Message input (always multi-line)
+  * `Enter` Send.
+  * `Alt+Enter` (or `Shift+Enter`) New line.
+  * `Ctrl+U` Attach a file using a file browser (remembers the last folder).
+  * `Ctrl+Shift+U` (or `Alt+U`) Clear text, attachments and reply.
+  * `Ctrl+O` Compose in your `$EDITOR`.
+  * `:name:` Insert emoji, `Tab` completes a partial `:name`.
+  * `Esc` Cancel reply / edit.
+  * Cursor: `Left/Right`, `Ctrl/Alt+Left/Right` by word, `Home/End`, `Ctrl+W` delete word.
+
+`Ctrl+M`, `Ctrl+Shift+U` and `Shift+Enter` need a terminal supporting the kitty keyboard
+protocol (kitty, Ghostty, Alacritty, foot, WezTerm, ...). Elsewhere use `Alt+M`, `Alt+U`
+and `Alt+Enter`.
+
+Images are shown as colored previews in the messages pane.
 
 ## File Uploads
-  * `file:///path/to/file` Upload File "file" at path "/path/to/"
-  * `file://clip` Upload Content of Clipboard
+  * `Ctrl+U` opens a file browser (`Enter` to choose, `h` up a folder, `/` to filter, `.` hidden files).
+  * Typing `file:///path/to/file` in a message still attaches that file.
 
 ## Configuration
 
@@ -170,8 +178,8 @@ The data directory (for messages, Signal database, attachments) is determined by
 ## Custom keybindings
 The default keybindings can be overwritten at startup by configuring
 keybindings in `gurk.toml` using the format `keybindings.<mode>.<keycombination> =
-"<command>"`. Valid commands are `anywhere`, `normal`, `message_selected`,
-`channel_modal`, `multiline`, and `help`. Valid key combination specifiers are e.g. `left,
+"<command>"`. Valid modes are `anywhere` (always), `main` (all three panes),
+`channels`, `messages`, `normal` (the message input), `channel_modal` and `help`. Valid key combination specifiers are e.g. `left,
 alt-j, ctrl-f, backspace, pagedown`. The default keybindings can be disabled by
 setting `default_keybindings = false`. An empty command removes an existing
 binding if it exists in the given mode. Configuration troubleshooted by running
@@ -202,6 +210,22 @@ delete_message
 open_url
 open_file
 toggle_mute_channel
+toggle_channel_list
+open_editor
+redraw
+new_line
+focus_next
+focus_previous
+focus_input
+react_picker
+reply
+open_message
+save_attachment
+attach_file
+clear_input
+search
+new_message
+paste
 ```
 
 ### Example configuration
@@ -227,7 +251,7 @@ ctrl-k = ""
 ctrl-n = "select_channel_modal next"
 ctrl-p = "select_channel_modal previous"
 
-[keybindings.message_selected]
+[keybindings.messages]
 alt-y = ""
 alt-w = "copy_message selected"
 ctrl-t = "react :thumbsup:"

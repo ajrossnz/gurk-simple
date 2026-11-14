@@ -9,6 +9,7 @@ use crate::storage::Storage;
 #[derive(Default)]
 pub(crate) struct SelectChannel {
     pub is_shown: bool,
+    pub title: &'static str,
     pub input: Input,
     pub state: ListState,
     items: Vec<ItemData>,

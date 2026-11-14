@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use uuid::Uuid;
 
 use crate::signal::Attachment;
@@ -16,5 +18,9 @@ pub enum Event {
     ProfileNameResolved {
         user_id: Uuid,
         name: Option<String>,
+    },
+    ImagePreviewLoaded {
+        path: PathBuf,
+        image: Option<image::RgbImage>,
     },
 }
