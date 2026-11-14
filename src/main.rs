@@ -12,12 +12,18 @@ use chrono::{DateTime, Utc};
 use clap::Parser;
 use crossterm::{
     event::{
-        DisableMouseCapture, EnableMouseCapture, Event as CEvent, EventStream, KeyEvent,
-        KeyEventKind, MouseButton, MouseEvent, MouseEventKind,
+        DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+        Event as CEvent, EventStream, KeyEvent,
+        KeyEventKind, KeyboardEnhancementFlags, MouseButton, MouseEvent, MouseEventKind,
+        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+        supports_keyboard_enhancement,
+    },
 };
+use gurk::app::Focus;
 use gurk::signal::LocalPool;
 use gurk::{app::App, config::Config};
 use gurk::{backoff::Backoff, passphrase::Passphrase};
@@ -226,8 +232,10 @@ async fn run(config: Config, passphrase: Passphrase, relink: bool) -> anyhow::Re
         disable_raw_mode().unwrap();
     });
 
+    // Query support before spawning the event reader (the reply is read from stdin).
+    let keyboard_enhancement = supports_keyboard_enhancement().unwrap_or(false);
     let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    enter_tui(&mut stdout, keyboard_enhancement)?;
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -341,6 +349,23 @@ async fn run(config: Config, passphrase: Passphrase, relink: bool) -> anyhow::Re
                         app.swap_channel_draft(old, new);
                         app.on_channel_changed();
                         app.reset_unread_messages();
+                        app.set_focus(Focus::Channels);
+                    } else if !app.is_popup_shown() {
+                        // clicked into the chat area: focus messages or input
+                        let area = terminal.get_frame().area();
+                        let chat_x = if app.is_channel_list_shown() {
+                            area.width / ui::CHANNEL_VIEW_RATIO as u16
+                        } else {
+                            0
+                        };
+                        if col >= chat_x {
+                            let input_height = app.input.data.lines().count().max(1) as u16 + 2;
+                            if row + input_height >= area.height {
+                                app.set_focus(Focus::Input);
+                            } else {
+                                app.set_focus(Focus::Messages);
+                            }
+                        }
                     }
                 }
                 MouseEventKind::ScrollUp => {
@@ -370,12 +395,7 @@ async fn run(config: Config, passphrase: Passphrase, relink: bool) -> anyhow::Re
                 },
             )) => app.on_key(event).await?,
             Some(Event::Input(..)) => {}
-            Some(Event::Paste(content)) => {
-                let multi_line_state = app.is_multiline_input;
-                app.is_multiline_input = true;
-                content.chars().for_each(|c| app.get_input().put_char(c));
-                app.is_multiline_input = multi_line_state;
-            }
+            Some(Event::Paste(content)) => app.paste_text(&content),
             Some(Event::Message(content)) => {
                 if let Err(e) = app.on_message(content).await {
                     error!("failed on incoming message: {}", e);
@@ -417,11 +437,7 @@ async fn run(config: Config, passphrase: Passphrase, relink: bool) -> anyhow::Re
             event_reader_handle.abort();
             let _ = event_reader_handle.await;
 
-            execute!(
-                terminal.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            )?;
+            leave_tui(terminal.backend_mut(), keyboard_enhancement)?;
             terminal.show_cursor()?;
             disable_raw_mode()?;
 
@@ -430,11 +446,7 @@ async fn run(config: Config, passphrase: Passphrase, relink: bool) -> anyhow::Re
                 tokio::task::spawn_blocking(move || edit::edit(initial_content)).await?;
 
             enable_raw_mode()?;
-            execute!(
-                terminal.backend_mut(),
-                EnterAlternateScreen,
-                EnableMouseCapture
-            )?;
+            enter_tui(terminal.backend_mut(), keyboard_enhancement)?;
             terminal.clear()?;
 
             event_reader_handle = spawn_event_reader();
@@ -455,13 +467,30 @@ async fn run(config: Config, passphrase: Passphrase, relink: bool) -> anyhow::Re
         }
     }
 
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )
-    .unwrap();
+    leave_tui(terminal.backend_mut(), keyboard_enhancement).unwrap();
     terminal.show_cursor().unwrap();
 
     res
+}
+
+/// Switches the terminal into the modes used by the TUI
+fn enter_tui(w: &mut impl std::io::Write, keyboard_enhancement: bool) -> std::io::Result<()> {
+    execute!(w, EnterAlternateScreen, EnableMouseCapture, EnableBracketedPaste)?;
+    if keyboard_enhancement {
+        // Lets us tell apart e.g. ctrl-m from enter, ctrl-shift-u from ctrl-u and shift-enter
+        // from enter
+        execute!(
+            w,
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+        )?;
+    }
+    Ok(())
+}
+
+/// Restores the terminal modes changed by [`enter_tui`]
+fn leave_tui(w: &mut impl std::io::Write, keyboard_enhancement: bool) -> std::io::Result<()> {
+    if keyboard_enhancement {
+        execute!(w, PopKeyboardEnhancementFlags)?;
+    }
+    execute!(w, DisableBracketedPaste, LeaveAlternateScreen, DisableMouseCapture)
 }

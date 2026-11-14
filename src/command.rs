@@ -131,12 +131,22 @@ pub enum MessageSelector {
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum WindowMode {
+    /// Always active (also while a popup is shown)
     Anywhere,
+    /// Active in all three panes (channels, messages, input) but not in popups
+    Main,
+    /// The channels sidebar has focus
+    Channels,
+    /// The messages pane has focus
+    Messages,
+    /// The message input has focus
+    Normal,
     Help,
     ChannelModal,
+    /// Deprecated: the input is always multi-line; bindings in this mode are ignored
     Multiline,
+    /// Deprecated alias of `messages`
     MessageSelected,
-    Normal,
 }
 
 #[derive(
@@ -160,8 +170,36 @@ pub enum Command {
     Quit,
     #[strum(props(desc = "Open pop-up for selecting a channel"))]
     ToggleChannelModal,
-    #[strum(props(desc = "Switch between single-line and multi-line modes."))]
+    #[strum(props(desc = "Deprecated: the input is always multi-line"))]
     ToggleMultiline,
+    #[strum(props(desc = "Insert a line break into the message"))]
+    NewLine,
+    #[strum(props(desc = "Move focus to the next pane (channels, messages, input)"))]
+    FocusNext,
+    #[strum(props(desc = "Move focus to the previous pane"))]
+    FocusPrevious,
+    #[strum(props(desc = "Move focus to the message input"))]
+    FocusInput,
+    #[strum(props(desc = "Open the emoji picker to react to the selected message"))]
+    ReactPicker,
+    #[strum(props(desc = "Reply to the selected message"))]
+    Reply,
+    #[strum(props(
+        desc = "Open the selected message: view image, download attachment or open link"
+    ))]
+    OpenMessage,
+    #[strum(props(desc = "Save attachments of the selected message to a chosen directory"))]
+    SaveAttachment,
+    #[strum(props(desc = "Attach a file using the file browser"))]
+    AttachFile,
+    #[strum(props(desc = "Clear the message input (text, attachments, reply)"))]
+    ClearInput,
+    #[strum(props(desc = "Find messages in the current channel"))]
+    Search,
+    #[strum(props(desc = "Start a new message to a contact or group"))]
+    NewMessage,
+    #[strum(props(desc = "Paste text or an image from the clipboard"))]
+    Paste,
     #[strum(props(desc = "Sends emoji from input line as reaction on selected message."))]
     React(Option<String>),
     #[strum(props(desc = "Scroll a widget", usage = "scroll help up|down entry"))]
@@ -464,68 +502,88 @@ F1 = "help"
 ctrl-c = "quit"
 ctrl-l = "redraw"
 
-[normal]
+[main]
+tab = "focus_next"
+backtab = "focus_previous"
+ctrl-n = "new_message"
 ctrl-p = "toggle_channel_modal"
-alt-enter = "toggle_multiline"
-ctrl-left = "move_text previous character"
-ctrl-right = "move_text next character"
+ctrl-m = "toggle_mute_channel"
+alt-m = "toggle_mute_channel"
+ctrl-f = "search"
+ctrl-v = "paste"
+alt-l = "toggle_channel_list"
+
+[channels]
+up = "select_channel previous"
+down = "select_channel next"
+k = "select_channel previous"
+j = "select_channel next"
+enter = "focus_input"
+right = "focus_input"
+l = "focus_input"
+
+[messages]
+up = "select_message previous entry"
+down = "select_message next entry"
+k = "select_message previous entry"
+j = "select_message next entry"
+pageup = "select_message previous entry"
+pagedown = "select_message next entry"
+enter = "open_message"
+ctrl-r = "react_picker"
+r = "reply"
+e = "edit_message"
+ctrl-e = "edit_message"
+ctrl-d = "delete_message"
+delete = "delete_message"
+y = "copy_message selected"
+alt-y = "copy_message selected"
+ctrl-s = "save_attachment"
+ctrl-u = "attach_file"
+ctrl-shift-u = "clear_input"
+alt-u = "clear_input"
+
+[normal]
+alt-enter = "new_line"
+shift-enter = "new_line"
+ctrl-u = "attach_file"
+ctrl-shift-u = "clear_input"
+alt-u = "clear_input"
+ctrl-o = "open_editor"
 left = "move_text previous character"
 right = "move_text next character"
+ctrl-left = "move_text previous word"
+ctrl-right = "move_text next word"
 alt-left = "move_text previous word"
 alt-right = "move_text next word"
-alt-up = "select_message previous entry"
-alt-down = "select_message next entry"
-alt-j = "select_message next entry"
-alt-k = "select_message previous entry"
-pagedown = "select_message next entry"
-pageup = "select_message previous entry"
-alt-f = "move_text next word"
-ctrl-f = "move_text next character"
 alt-b = "move_text previous word"
-ctrl-b = "move_text previous character"
-ctrl-u = "kill_backward_line"
-ctrl-w = "kill_word"
-ctrl-j = "select_channel next"
-ctrl-k = "select_channel previous"
-down = "select_channel next"
-up = "select_channel previous"
-alt-backspace = "kill_word"
+alt-f = "move_text next word"
+up = "move_text previous line"
+down = "move_text next line"
 home = "beginning_of_line"
 ctrl-a = "beginning_of_line"
 end = "end_of_line"
 ctrl-e = "end_of_line"
+ctrl-w = "kill_word"
+alt-backspace = "kill_word"
+ctrl-k = "kill_line"
 backspace = "delete_character previous"
 delete = "delete_character next"
-tab = "react"
-alt-m = "toggle_mute_channel"
-alt-l = "toggle_channel_list"
-ctrl-o = "open_editor"
-
-[message_selected]
-alt-y = "copy_message selected"
-ctrl-e = "edit_message"
-ctrl-d = "delete_message"
-ctrl-t = "react :thumbsup:"
-ctrl-h = "react ❤️"
+pageup = "select_message previous entry"
+pagedown = "select_message next entry"
 
 [channel_modal]
 esc = "toggle_channel_modal"
 ctrl-p = "toggle_channel_modal"
+ctrl-n = "toggle_channel_modal"
 down = "select_channel_modal next"
 up = "select_channel_modal previous"
 ctrl-j = "select_channel_modal next"
 ctrl-k = "select_channel_modal previous"
-ctrl-left = "move_text previous character"
-ctrl-right = "move_text next character"
 left = "move_text previous character"
 right = "move_text next character"
 alt-left = "move_text previous word"
 alt-right = "move_text next word"
-alt-f = "move_text next word"
-ctrl-f = "move_text next character"
-alt-b = "move_text previous word"
-ctrl-b = "move_text previous character"
-ctrl-u = "kill_backward_line"
 ctrl-w = "kill_word"
 alt-backspace = "kill_word"
 home = "beginning_of_line"
@@ -535,16 +593,11 @@ ctrl-e = "end_of_line"
 backspace = "delete_character previous"
 delete = "delete_character next"
 
-[multiline]
-down = "move_text next line"
-up = "move_text previous line"
-ctrl-j = "move_text next line"
-ctrl-k = "move_text previous line"
-
 [help]
 esc = "help"
-ctrl-j = "scroll help down entry"
-ctrl-k = "scroll help up entry"
+q = "help"
+j = "scroll help down entry"
+k = "scroll help up entry"
 down = "scroll help down entry"
 up = "scroll help up entry"
 pagedown = "scroll help down entry"
