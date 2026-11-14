@@ -1,7 +1,9 @@
-# gurk 🥒
+# gurk-rs - simplified 🥒
 [![ci][ci-badge]][ci-link] [![chat][chat-badge]][chat-link] [![ko-fi][ko-fi-badge]][ko-fi-link]
 
-[Signal Messenger] client for terminal.
+[Signal Messenger] client for terminal - lazy/easy version.
+
+gurk is way cool, however I found the interface a little intimidating, so this fork will seek to make the TUI a bit more user-friendly. That is all.
 
 ![screenshot](screenshot.png)
 
