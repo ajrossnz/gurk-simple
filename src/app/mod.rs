@@ -387,8 +387,7 @@ impl App {
                 }
             }
             Focus::Channels | Focus::Input => {
-                if previous == Focus::Messages && self.replying_to.is_none() && !self.is_editing()
-                {
+                if previous == Focus::Messages && self.replying_to.is_none() && !self.is_editing() {
                     self.reset_message_selection();
                 }
             }

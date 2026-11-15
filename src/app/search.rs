@@ -57,9 +57,9 @@ impl App {
                     let text = m.message.as_deref().unwrap_or_default();
                     let matches = text.to_lowercase().contains(&query)
                         || m.attachments.iter().any(|a| {
-                            a.filename
-                                .file_name()
-                                .is_some_and(|f| f.to_string_lossy().to_lowercase().contains(&query))
+                            a.filename.file_name().is_some_and(|f| {
+                                f.to_string_lossy().to_lowercase().contains(&query)
+                            })
                         });
                     matches.then(|| SearchHit {
                         arrived_at: m.arrived_at,
@@ -70,9 +70,7 @@ impl App {
                 .take(MAX_HITS);
             search.hits.extend(hits);
         }
-        search
-            .state
-            .select((!search.hits.is_empty()).then_some(0));
+        search.state.select((!search.hits.is_empty()).then_some(0));
     }
 
     pub(super) fn on_search_key(&mut self, key: KeyEvent) {

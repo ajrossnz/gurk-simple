@@ -13,9 +13,9 @@ use clap::Parser;
 use crossterm::{
     event::{
         DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-        Event as CEvent, EventStream, KeyEvent,
-        KeyEventKind, KeyboardEnhancementFlags, MouseButton, MouseEvent, MouseEventKind,
-        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+        Event as CEvent, EventStream, KeyEvent, KeyEventKind, KeyboardEnhancementFlags,
+        MouseButton, MouseEvent, MouseEventKind, PopKeyboardEnhancementFlags,
+        PushKeyboardEnhancementFlags,
     },
     execute,
     terminal::{
@@ -475,7 +475,12 @@ async fn run(config: Config, passphrase: Passphrase, relink: bool) -> anyhow::Re
 
 /// Switches the terminal into the modes used by the TUI
 fn enter_tui(w: &mut impl std::io::Write, keyboard_enhancement: bool) -> std::io::Result<()> {
-    execute!(w, EnterAlternateScreen, EnableMouseCapture, EnableBracketedPaste)?;
+    execute!(
+        w,
+        EnterAlternateScreen,
+        EnableMouseCapture,
+        EnableBracketedPaste
+    )?;
     if keyboard_enhancement {
         // Lets us tell apart e.g. ctrl-m from enter, ctrl-shift-u from ctrl-u and shift-enter
         // from enter
@@ -492,5 +497,10 @@ fn leave_tui(w: &mut impl std::io::Write, keyboard_enhancement: bool) -> std::io
     if keyboard_enhancement {
         execute!(w, PopKeyboardEnhancementFlags)?;
     }
-    execute!(w, DisableBracketedPaste, LeaveAlternateScreen, DisableMouseCapture)
+    execute!(
+        w,
+        DisableBracketedPaste,
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )
 }

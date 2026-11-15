@@ -496,8 +496,7 @@ fn draw_chat(f: &mut Frame, app: &mut App, area: Rect) {
     let mut block = pane_block(Line::from(title), focused);
     if let Some(status) = app.status() {
         block = block.title_bottom(
-            Line::styled(format!(" {status} "), Style::default().fg(Color::Yellow))
-                .right_aligned(),
+            Line::styled(format!(" {status} "), Style::default().fg(Color::Yellow)).right_aligned(),
         );
     }
 
@@ -1172,17 +1171,18 @@ fn bindings(app: &App) -> Vec<Line<'_>> {
         WindowMode::MessageSelected,
     ]
     .iter()
-    .filter(|mode| app.mode_keybindings.get(mode).is_some_and(|kb| !kb.is_empty()))
+    .filter(|mode| {
+        app.mode_keybindings
+            .get(mode)
+            .is_some_and(|kb| !kb.is_empty())
+    })
     .map(|mode| bindings_mode(app, mode))
     .concat()
 }
 
 fn help_quick_guide<'a>() -> Vec<Line<'a>> {
     let bold = Style::default().add_modifier(Modifier::BOLD);
-    let mut v = vec![
-        Line::styled("Quick guide", bold),
-        Line::default(),
-    ];
+    let mut v = vec![Line::styled("Quick guide", bold), Line::default()];
     v.extend(
         [
             "The screen has three panes: chats (left), messages and the message input.",
@@ -1236,7 +1236,10 @@ fn bindings_mode<'a>(app: &App, mode: &WindowMode) -> Vec<Line<'a>> {
     let mut v = vec![
         Line::default(),
         Line::styled(
-            format!("Bindings for {} (config section [{mode}])", mode_title(mode)),
+            format!(
+                "Bindings for {} (config section [{mode}])",
+                mode_title(mode)
+            ),
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Line::default(),
@@ -1287,7 +1290,9 @@ fn draw_help(f: &mut Frame, app: &mut App, area: Rect) {
     command_bindings.push(Line::default());
     command_bindings.extend(help_commands());
     let command_bindings = Paragraph::new(Text::from(command_bindings))
-        .block(popup_block(" Help: shortcuts (Esc to close, ↑↓ to scroll) "))
+        .block(popup_block(
+            " Help: shortcuts (Esc to close, ↑↓ to scroll) ",
+        ))
         .scroll(app.help_scroll);
     f.render_widget(command_bindings, area);
 }
@@ -1358,9 +1363,8 @@ fn draw_reaction_picker(f: &mut Frame, picker: &ReactionPicker) {
         Span::styled(search_text, search_style),
     ]));
 
-    let block = popup_block(" React ").title_bottom(
-        Line::styled(" Enter: react · Esc: cancel ", hint_style()).centered(),
-    );
+    let block = popup_block(" React ")
+        .title_bottom(Line::styled(" Enter: react · Esc: cancel ", hint_style()).centered());
     f.render_widget(Paragraph::new(lines).block(block), area);
 }
 
@@ -1407,12 +1411,16 @@ fn draw_file_browser(f: &mut Frame, browser: &mut FileBrowser) {
             if entry.is_save_here {
                 ListItem::new(Line::styled(
                     entry.name.clone(),
-                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
                 ))
             } else if entry.is_dir {
                 ListItem::new(Line::styled(
                     format!("{}/", entry.name),
-                    Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Blue)
+                        .add_modifier(Modifier::BOLD),
                 ))
             } else {
                 let size = entry.size.map(human_size).unwrap_or_default();

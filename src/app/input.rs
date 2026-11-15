@@ -322,7 +322,11 @@ impl App {
             self.set_status("No message selected");
             return;
         };
-        if message.attachments.iter().any(|a| is_image(&a.content_type)) {
+        if message
+            .attachments
+            .iter()
+            .any(|a| is_image(&a.content_type))
+        {
             open_file(&message);
             self.set_status("Opening image in the default viewer");
         } else if !message.attachments.is_empty() {

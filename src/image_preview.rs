@@ -45,7 +45,12 @@ pub fn load_thumbnail(path: &Path) -> Option<RgbImage> {
 
 /// Renders the thumbnail into at most `max_cols` x `max_rows` cells, each line prefixed by
 /// `indent`
-pub fn render(image: &RgbImage, max_cols: usize, max_rows: usize, indent: &str) -> Vec<Line<'static>> {
+pub fn render(
+    image: &RgbImage,
+    max_cols: usize,
+    max_rows: usize,
+    indent: &str,
+) -> Vec<Line<'static>> {
     let (w, h) = image.dimensions();
     if w == 0 || h == 0 || max_cols == 0 || max_rows == 0 {
         return Vec::new();
@@ -58,7 +63,8 @@ pub fn render(image: &RgbImage, max_cols: usize, max_rows: usize, indent: &str) 
         cols = ((rows * 2 * w as usize) / h as usize).clamp(1, max_cols);
     }
     let rows = rows.max(1);
-    let resized = image::imageops::resize(image, cols as u32, rows as u32 * 2, FilterType::Triangle);
+    let resized =
+        image::imageops::resize(image, cols as u32, rows as u32 * 2, FilterType::Triangle);
 
     (0..rows as u32)
         .map(|row| {

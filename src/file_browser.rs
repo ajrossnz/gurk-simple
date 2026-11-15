@@ -152,7 +152,10 @@ impl FileBrowser {
     }
 
     fn change_dir(&mut self, dir: PathBuf) {
-        let previous = self.dir.file_name().map(|n| n.to_string_lossy().into_owned());
+        let previous = self
+            .dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned());
         let going_up = self.dir.parent() == Some(dir.as_path());
         self.dir = dir;
         self.filter.clear();
@@ -237,7 +240,10 @@ impl FileBrowser {
             KeyCode::End | KeyCode::Char('G') => self.move_selection(isize::MAX / 2),
             KeyCode::Left | KeyCode::Backspace | KeyCode::Char('h') => self.go_up(),
             KeyCode::Right | KeyCode::Char('l') => {
-                if self.selected_entry().is_some_and(|e| e.is_dir && !e.is_save_here) {
+                if self
+                    .selected_entry()
+                    .is_some_and(|e| e.is_dir && !e.is_save_here)
+                {
                     return self.activate();
                 }
             }
