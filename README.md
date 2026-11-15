@@ -1,11 +1,15 @@
 # gurk-rs - simplified 🥒
-[![ci][ci-badge]][ci-link] [![chat][chat-badge]][chat-link] [![ko-fi][ko-fi-badge]][ko-fi-link]
-
 [Signal Messenger] client for terminal - lazy/easy version.
 
-gurk is way cool, however I found the interface a little intimidating, so this fork will seek to make the TUI a bit more user-friendly. That is all.
+gurk is way cool, however I found the interface a little intimidating, so this fork seeks to make the TUI a bit more user-friendly.
 
-![screenshot](screenshot.png)
+It also includes ASCII representations of images straight into the message, which you can hit enter on to see them with your default image handler.
+
+Navigation between each of the panels is via the tab key, e.g. type a message / message history / chat selector. There's also a handy context 
+
+to talk to the original authors (I have no affiliation with these links): [![ci][ci-badge]][ci-link] [![chat][chat-badge]][chat-link] [![ko-fi][ko-fi-badge]][ko-fi-link]
+
+![screenshot](screenshot2.png)
 
 # Installation
 
